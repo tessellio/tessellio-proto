@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package tessellio.v1;
+
+// The Tessellio screen codec's wire schema.
+//
+// The codec's payload grammar — the op stream, the DEFLATE envelope, the
+// coverage rules — is defined by the codec specification, not here. This file
+// defines the *envelope* the codec's updates travel in: the identity of an
+// update, the part it is, and the regions it carries.
+//
+// Field numbers are a wire contract: never reuse one, never renumber an
+// existing one.
+
+// The codecs this schema can carry. There is one: the codec is exact at wire
+// fidelity, so there is nothing to select.
+enum Codec {
+  CODEC_UNSPECIFIED = 0;
+  // The Tessellio codec.
+  CODEC_TESSELLIO = 8;
+}
+
+// One region of an update: a rectangle of the surface, and the op stream
+// that paints it.
+message Region {
+  // The rectangle's left edge, in cells.
+  int32 x = 1;
+  // The rectangle's top edge, in cells.
+  int32 y = 2;
+  // The rectangle's width, in cells.
+  int32 width = 3;
+  // The rectangle's height, in cells.
+  int32 height = 4;
+  // The region's content: a raw DEFLATE stream carrying the op stream.
+  bytes payload = 5;
+}
+
+// One part of one update.
+//
+// An update is either self-contained (`base_update_id == 0`: it establishes
+// the whole surface) or chained (`base_update_id > 0`: it continues exactly
+// the surface the named base established). An update is applied whole: every
+// part of it, or none.
+message Update {
+  // >= 1; monotone within a stream; replicated in every part.
+  int64 update_id = 1;
+  // 0 => self-contained; otherwise the update this one continues.
+  int64 base_update_id = 2;
+  // 1..=8192, with width*height <= 16777216; replicated in every part.
+  int32 width = 3;
+  // 1..=8192, with width*height <= 16777216; replicated in every part.
+  int32 height = 4;
+  // 0..part_count-1, ascending on the stream.
+  int32 part_index = 5;
+  // 1..=8; replicated in every part.
+  int32 part_count = 6;
+  // The sum of the region payload bytes over the whole update.
+  int64 update_bytes = 7;
+  // The codec that produced the body.
+  Codec codec = 8;
+  // This part's regions, ascending by (y, x), byte-disjoint from the other
+  // parts' regions.
+  repeated Region regions = 9;
+}
